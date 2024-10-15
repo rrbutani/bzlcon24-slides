@@ -89,10 +89,13 @@ hey there bazelcon!
 
 <!--
 
-TODO(script): previous
-TODO(script): genrule
-TODO(terminal): execute
-TODO(terminal): execute + boom (highlights?)
+TODO: speaker notes
+
+--
+
+so how do we fix this?
+
+the first hurdle is having some way to talk about this "external" dependency in Bazel
 
  -->
 
@@ -155,7 +158,11 @@ $OUTB/external/_main~_repo_rules~foo/BUILD.bazel:1:1: ...
 
 <!--
 
-repo rules like `new_local_repository`
+how do we model external paths in the Bazel build graph?
+
+fortunately there's a pretty clear answer here
+
+to use repo rules like `new_local_repository`
 
 shadow symlink tree for the directory, overlays BUILD files that have targets exposing contents of the directory
 
@@ -226,12 +233,16 @@ hey there bazelcon!
 </code></pre>
 </v-click>
 
+  <!-- rerunning the same sequence of commands actually _does_ result in Bazel re-running our genrule when the external dep `prelude` is modified -->
+
 <!--
   once we have the a Bazel target for the external dependency, using it is simple
 
-  our previous example, now with deps on `prelude` and `frob`
+  here's our previous example, now with deps on `prelude` and `frob`
 
-  rerunning the same sequence of commands actually _does_ result in Bazel re-running our genrule when the external dep `prelude` is modified
+  and now if we rerun the same sequence of commands as before...
+
+  Bazel actually does re-build our genrule target when the external path changes
 -->
 
 ---
@@ -243,6 +254,8 @@ class: text-center
 consider: the role of the sandbox..
 
 <!--
+
+unfortunately this doesn't mean all of our problems are solved
 
 in this case we knew about the missing dependency so we were able to fix it
 
@@ -287,8 +300,9 @@ Target //examples/simple:simple failed to build
 </v-click>
 
 <!--
-  TODO(terminal): execute
-  TODO(terminal): execute again with extra flags; still error on "can't find file"...
+
+TODO: speaker notes
+
 -->
 
 ---
@@ -305,7 +319,7 @@ zoom: 1.0
 
 ::left::
 
-##### regular linux sandbox base:
+##### regular linux sandbox dir:
 
 <pre class="terminal shiki vitesse-dark vitesse-light slidev-code" style="font-size:0.8em">
 <code class="language-bash">$ tree $OUTB/sandbox/linux-sandbox/17/execroot/_main
@@ -330,7 +344,7 @@ zoom: 1.0
 
 ::right::
 
-##### hermetic linux sandbox base:
+##### hermetic linux sandbox dir:
 
 <pre class="terminal shiki vitesse-dark vitesse-light slidev-code" style="font-size:0.8em">
 <code class="language-bash">$ tree $OUTB/sandbox/linux-sandbox/15/execroot/_main
@@ -358,19 +372,20 @@ zoom: 1.0
 
 <!--
 
-On the left is the sandbox base constructed when running with the `linux-sandbox` execution strategy, on the right is the sandbox base for the hermetic `linux-sandbox`
+On the left is the sandbox directory constructed when running with the `linux-sandbox` execution strategy, on the right is the sandbox base for the hermetic `linux-sandbox`
 
 Salient difference is how the inputs are staged: on the left we have symlinks...
 
 On the right we have... what looks like actual files! In reality these are hardlinks.
 
+the reason for this is that
 Under the hermetic linux sandbox there's no guarantee that the absolute paths for resources are actually present in the sandbox so... can't use the symlink staging strategy.
 
 -
 
 Issue here is:
 
-Fundamental mismatch in how artifacts are consumed: in both cases, sandbox is surfacing the artifact for use via relative path.
+Fundamental mismatch in how artifacts are consumed: in both cases, sandbox is surfacing the artifact within the execroot for use via relative path. But our script is trying to consume it at an absolute path.
 
 In the case of the linux-sandbox the use of the absolute path means that the tool does an end run around the sandbox.
 
@@ -417,7 +432,7 @@ at this point I'm sure many of you are thinking:
 
 this seems super gross, lots of other reasons to not do this...
 
-can't we just modify the tools to use `runfiles`?
+can't we just modify the tools to use `runfiles` or take an arg or something?
 
 and you're right -- not ideal
 

@@ -79,10 +79,7 @@ Target //examples/simple:simple up-to-date:
 </v-click>
 
 
-<!-- TODO[script]: (old) genrule left
-     TODO[terminal]: (old) previous execution error
-     TODO(terminal): add `--sandbox_mount_pair` -> succeeds
-
+<!--
 we got close with the hermetic linux sandbox: we were able to control access to the host file path... we just weren't able to make the sandbox expose the artifact at the absolute path
 
 we can do this manually using `--sandbox_add_mount_pair` — if we do so, the build succeeds, as we'd expect
@@ -101,20 +98,23 @@ this is more or less what our changes to the hermetic linux-sandbox do...
 
 two main changes to the hermetic `linux-sandbox`:
   - look for "external" symlinks in an action, lower to bind mounts when executing
-  - stage in inputs as symlinks again (instead of bind mounts)
+  - stage in inputs (in the sandbox dir) as symlinks again (instead of hardlinks)
     + failure mode for hardlinks was untenable: large file copies
       * i.e. when sandbox base is on tmpfs/different filesystem than sources
 
 
 
 <!--
+TO DO(script): new_local_repo, minified
+    TO DO(script): bind mounts
+    TO DO(script): sandbox invocation
+    TO DO(terminal): linux sandbox invocation mount map output?
 
+    nah, it's fine; covered later I think
+-->
+
+<!--
 two main changes
-
-TODO(script): new_local_repo, minified
-    TODO(script): bind mounts
-    TODO(script): sandbox invocation
-    TODO(terminal): linux sandbox invocation mount map output?
 -->
 
 ---
@@ -123,23 +123,19 @@ layout: two-cols
 
 # Details: Symlink Chains
 
-```shell {all|3,7,11,15,17}
+```shell {all|3,6,9,12,13}
 /nfs/projects/foo/latest/assets/prelude
 ^^^^^^^^^^^^^^^^^
 /nfs/projects/foo -> /nfs/special/project/area/foo
-
 /nfs/special/project/area/foo/latest/assets/prelude
 ^^^^^^^^^^^^
 /nfs/special -> /nfs/mutable_space/special
-
 /nfs/mutable_space/special/project/area/foo/latest/assets/prelude
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 /nfs/mutable_space/special/project -> /nfs/a/
-
 /nfs/a/area/foo/latest/assets/prelude
 ^^^^^^^^^^^^^^^^^^^^^^
 /nfs/a/area/foo/latest -> 1.0.0
-
 /nfs/a/area/foo/1.0.0/assets/prelude (file)
 ```
 
@@ -148,8 +144,8 @@ layout: two-cols
   - the above 5 paths are collected for bind mounting
     * 4 symlinks, 1 file
   - some tools care!
-
-  TODO: mention detail about kernel support, needing to recreate symlinks not bind mount
+  - misc: w/o Linux v5.12+, cannot _bind mount_  symlinks
+    + [`AT_SYMLINK_NOFOLLOW`](https://man7.org/linux/man-pages/man2/mount_setattr.2.html), otherwise: recreate
 
 </v-click>
 
@@ -281,14 +277,12 @@ no changes, really; can just swap out `bazel` for `bazel-fork` and it... works n
 note: path is available both at abs path location and is also staged in the bazel execroot (as a symlink)
 
 
-TODO[script]: old genrule
-TODO(terminal): now can run with the bazel fork, without mount pair flag
-  - show `sandbox_debug` output i guess?
-
 NOTE: skipping tree view from action for simplicity
 
  -->
 
+---
+disabled: true
 ---
 
 # Optimization: Immutable Directories
@@ -305,6 +299,8 @@ TODO(script): bazel query output I guess?
 lo-prio
  -->
 
+---
+disabled: true
 ---
 
 # Optimization: Excludes
@@ -323,10 +319,75 @@ lo-prio
 
 ---
 transition: fade-out
+layout: two-cols
 ---
 
 # Details: "Splatting"
-💢
+💢: excludes, asymmetric bind mounts
+
+  - overlayFS semantics but with bind mounts (sort of)
+  - why not just use overlayFS?
+    + unprivileged use → modern Linux kernel versions
+
+<pre class="terminal shiki vitesse-dark vitesse-light slidev-code" style="font-size:0.8em">
+<code class="language-bash">$ ls /tmp/dir
+a  b  c  d  e  f
+</code></pre>
+
+<hr>
+
+<pre class="terminal shiki vitesse-dark vitesse-light slidev-code" style="font-size:0.8em">
+<code class="language-bash">$ linux-sandbox -D /dev/stderr -M /tmp/dir -- ...
+sandbox-helpers.rs:1837: mount map:
+<font color="#12488B"><b>/</b></font>
+└──<font color="#12488B"><b>tmp</b></font>
+    └──<font color="#12488B">dir</font>
+
+<b>mounting </b><font color="#12488B"><b>directory</b></font>: /tmp/dir
+soft exclude map:
+<font color="#12488B"><b>/</b></font>
+
+counts:
+  - bind mounts: 1
+  - splats: 0
+  - mounts from splatting: 0
+</code></pre>
+
+::right::
+
+<pre class="terminal shiki vitesse-dark vitesse-light slidev-code" style="font-size:0.8em">
+<code class="language-bash">$ linux-sandbox -D /dev/stderr -M /tmp/dir -Z /tmp/dir/f
+<font color="#12488B"><b>/</b></font>
+└──<font color="#12488B"><b>tmp</b></font>
+    └──<font color="#12488B">dir</font>
+<b>mounting </b><font color="#12488B"><b>directory</b></font>: /tmp/dir
+excluding <font color="#A2734C">file</font> at `&lt;sandbox&gt;/tmp/dir/f`
+soft exclude map:
+<font color="#12488B"><b>/</b></font>
+└──<font color="#12488B"><b>tmp</b></font>
+    └──<font color="#12488B"><b>dir</b></font>
+        └──f (from: <b>tmp/empty_file</b>)
+counts(bind mounts: 2, splats: 0, mounts from splatting: 0)
+</code></pre>
+
+<hr>
+
+<pre class="terminal shiki vitesse-dark vitesse-light slidev-code" style="font-size:0.8em">
+<code class="language-bash">$ linux-sandbox -D /dev/stderr -M /tmp/dir -E /tmp/dir/f -- ...
+splatting bind mount /tmp/dir due to exclude at /tmp/dir/f
+shadowing include at `/tmp/dir/f` with exclude
+mount map:
+<font color="#12488B"><b>/</b></font>
+└──<font color="#12488B"><b>tmp</b></font>
+    └──<font color="#12488B"><b>dir</b></font> # 👈 NOTE: splatted!
+        ├──a
+        ├──b
+        ├──c
+        ├──d
+        ├──e
+        └──<font color="#C01C28"><b>f</b></font> (excluded)
+counts(bind mounts: 5, splats: 1, mounts from splatting: 6)
+</code></pre>
 
 <!--
 
@@ -339,8 +400,4 @@ required to support:
   - hard excludes
   - asymmetric bind mounts (where the source path doesn't match the dest path)
 
-TODO(terminal): tree output before splat
-TODO(terminal): tree output after splat
-
-lo-prio
 -->

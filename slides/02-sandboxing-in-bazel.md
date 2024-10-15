@@ -38,7 +38,7 @@ layout: two-cols
   1. `standalone`
       + `pwd` = execroot → <font style="color:#bf616a"> _reach other inputs by rel path_ </font>
   1. `processwrapper-sandbox`
-      + `pwd` = sandbox base → <font style="color:#a3be8c"> symlink tree w/subset </font>
+      + `pwd` = sandbox dir → <font style="color:#a3be8c"> symlink tree w/subset </font>
   1. `linux-sandbox`/`darwin-sandbox`
       + same staging strategy as ☝️ (<font style="color:#a3be8c">symlink tree</font>)
       + plus: _restricted I/O_, _<u>read-only</u> host filesystem_
@@ -151,8 +151,8 @@ layout: two-cols
 
 </v-click>
 
-<!-- TODO(terminal): linux-sandbox
-     TODO(terminal): hermetic? ... nah
+<!--
+     TO DO(terminal): hermetic? ... nah
 -->
 
 <!--
@@ -165,11 +165,20 @@ From least to most strict we have:
 
 standalone
 
+as simple as it gets
+
+unfettered access to the host file system
+
+one important detail is that this strategy executes actions directly in the execroot
+  - means that even if only using relative paths, actions can read undeclared inputs and outputs from other Bazel actions
+
 ====
 
 process wrapper
 
 name of the game here is symlinks, see bottom right
+
+in practice works pretty well if you can ensure that your tools only use relative paths that don't escape pwd
 
 ====
 

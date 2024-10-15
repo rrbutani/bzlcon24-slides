@@ -73,8 +73,6 @@ py_runtime_pair(
 )
 ```
 
-<!-- TODO(script): starlark toolchain decl example -->
-
 <!-- toolchains are our friend here; nice extension point to go and specify these machine-specific dependencies
 
 python interpreter example
@@ -152,10 +150,6 @@ genrule(
 )
 ```
 
-<!--
-    ~~TODO : graphviz graph? (later)~~
--->
-
 <!-- from here on out getting things to work under this strict sandboxing mode is pretty much an exercise in finding implicit dependencies in the Bazel ecosystem
 
 I'll talk about a few of the bigger ones
@@ -229,10 +223,10 @@ def py_test(name, **kw_args):
     )
 ```
 
-<!-- TODO(script): wrapper macros... -->
-
 <!-- `rules_shell` `sh_toolchain` -->
 
+---
+layout: two-cols-header
 ---
 
 # Latent Dependency Graph: Language Packages
@@ -242,14 +236,53 @@ interpreted languages: python, perl, ruby, etc.
     + motivation here is the static graph information mostly
   - created repo rules to map out dependency edges between packages
 
-<!-- TODO(script): interface
-  TODO(terminal): error message?
- -->
+::left::
 
-<!-- motivation here is the static graph information mostly
+```python
+PYTHON_LIBRARY_DEPS = [
+    PyDep("Mako", "1.2.4", deps = ["MarkupSafe"]),
+    PyDep("MarkupSafe", "2.1.1"),
+    PyDep("ruamel.yaml", "0.17.21"),
+    PyDep("ruamel.yaml.clib", "0.2.7",
+        shared_objects = ["_ruamel_yaml"]),
+    PyDep("pyelftools", "0.29"),
+    FetchedPyDep("lddtree", "1.3.7", deps = ["pyelftools"],
+        fetch_info = fetchers.file(
+          url = "https://.../v{VERSION}/lddtree.py",
+          integrity = "sha256-...",
+    )),
+    FetchedPyDep("pathspec", "0.12.1",
+        fetch_info = fetchers.pypi_whl(integrity = "...")),
+    ...
+]
+```
 
-perhaps a bit specific to our use case
+::right::
 
+```python
+load("//rules/python:defs.bzl",
+  "py_binary", "py_requirement"
+)
+
+py_binary(
+    name = "foo",
+    deps = [
+        py_requirement("Mako"),
+        py_requirement("ruamel.yaml"),
+        py_requirement("yamllint"),
+    ],
+    ...
+)
+```
+
+<!--
+
+perhaps a bit specific to our use case: locked into using global installations for interpreters like Perl, Python, Ruby, etc. due to packages that they have installed that we cannot easily install ourselves "locally"
+
+desire to still have users list out package deps instead of just having access to everything from the system installation
+  + motivation here is the static graph information mostly
+
+repo rule to figure out what the files corresponding to each package are, sets up filegroups and dependency edges accordingly
 -->
 
 ---
@@ -269,5 +302,4 @@ transition: fade-out
 
 ![](../assets/examples_simple-deps.png)
 
-<!-- TODO(image): graphviz graph (needs theming maybe? or convert to mermaid)
--->
+<!-- speaker notes -->
