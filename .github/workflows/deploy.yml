@@ -22,7 +22,9 @@ jobs:
       - uses: rrbutani/use-nix-shell-action@v1
       - run: |
           yarn install
-          yarn run build --base /${{github.event.repository.name}}/
+          yarn run build \
+            --base /${{github.event.repository.name}}/ \
+            --executable-path "$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"
 
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3

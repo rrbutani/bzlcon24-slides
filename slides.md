@@ -26,7 +26,7 @@ keywords: bazelcon, sandboxing, hermetic
 presenter: true
 
 # enabled pdf downloading in SPA build, can also be a custom url
-download: false
+download: true
 
 # filename of the export file
 exportFilename: sandboxing_bzlcon2024.pdf
